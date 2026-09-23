@@ -94,7 +94,10 @@ class Capture:
         self.settle, self.max_wait = settle, max_wait
         self.shape = self.area = self.last = self.pending = None
         self.t = self.t0 = 0.0
-        cap = WindowsCapture(window_hwnd=hwnd)  # cursor_capture/draw_border 留默认，老版 Win10 不支持切换会抛异常
+        # 包装层默认 cursor_capture=True，会去调 SetIsCursorCaptureEnabled。
+        # 这个属性要 Win10 2004（build 19041）才有，1909 及更早直接抛 CursorConfigUnsupported。
+        # 显式 None 走系统默认，不去切换；draw_border 同理。
+        cap = WindowsCapture(cursor_capture=None, draw_border=None, window_hwnd=hwnd)
         cap.event(self.on_frame_arrived)
         cap.event(self.on_closed)
         self.ctl = cap.start_free_threaded()

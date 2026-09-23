@@ -7,11 +7,11 @@ from datetime import datetime
 from math import isfinite
 from types import SimpleNamespace
 
-from PySide6.QtCore import QObject, Qt, QTimer, Signal
+from PySide6.QtCore import QObject, QSize, Qt, QTimer, Signal
 from PySide6.QtGui import QColor, QFont, QPixmap
 from PySide6.QtWidgets import (
-    QApplication, QFrame, QHBoxLayout, QLabel, QSizeGrip, QSizePolicy, QStackedWidget,
-    QVBoxLayout, QWidget,
+    QApplication, QFrame, QHBoxLayout, QLabel, QPushButton, QSizeGrip, QSizePolicy,
+    QStackedWidget, QVBoxLayout, QWidget,
 )
 from qfluentwidgets import (
     BodyLabel, CardWidget, CheckBox, ComboBox, EditableComboBox, FluentIcon as FIF,
@@ -71,6 +71,39 @@ class _MpBanner(QLabel):
         self.setPixmap(self._src.scaled(w, h, Qt.KeepAspectRatio, Qt.SmoothTransformation))
         if self.height() != h:
             self.setFixedHeight(h)
+
+
+class _FitCombo(ComboBox):
+    """长名字不撑开窄布局。按钮上按当前宽度省略；条目仍是全文，findText 靠它。"""
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self._full = ""
+        self.setMinimumWidth(0)
+        self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+
+    def setText(self, text):
+        self._full = text or ""
+        QPushButton.setText(self, self._elide(self._full))
+        if self._full and self.text() != self._full:
+            self.setToolTip(self._full)
+
+    def minimumSizeHint(self):
+        hint = QPushButton.minimumSizeHint(self)
+        return QSize(48, hint.height())
+
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        shown = self._elide(self._full)
+        if shown != self.text():
+            QPushButton.setText(self, shown)
+        if self._full and shown != self._full:
+            self.setToolTip(self._full)
+
+    def _elide(self, text):
+        # 右侧箭头大约 28px。还没排上版时先按一个窄宽度省略，避免最小宽度被整句名字撑开。
+        avail = self.width() - 36 if self.width() > 64 else 120
+        return self.fontMetrics().elidedText(text, Qt.ElideRight, max(24, avail))
 
 
 def _label(text="", size=14, color=None, bold=False, parent=None):
@@ -341,8 +374,7 @@ class Overlay:
         prefix = _label("当前会话", 12, _MUTED)
         prefix.setFixedWidth(56)
         chat_row.addWidget(prefix)
-        self.chatBox = ComboBox()
-        self.chatBox.setMinimumWidth(0)  # 别让会话名的长度撑开整行，宽度交给 stretch
+        self.chatBox = _FitCombo()
         self.chatBox.setPlaceholderText("尚未识别到会话")
         self.chatBox.setAccessibleName("当前会话")
         self.chatBox.setToolTip("微信切到哪个会话这里就跟到哪个；也可以自己选一个，只看它的记录和建议")
@@ -360,8 +392,7 @@ class Overlay:
         target_prefix = _label("回复对象", 12, _MUTED)
         target_prefix.setFixedWidth(56)
         target_row.addWidget(target_prefix)
-        self.targetBox = ComboBox()
-        self.targetBox.setMinimumWidth(0)  # 人名长度不定，别让它撑开整行
+        self.targetBox = _FitCombo()
         self.targetBox.setAccessibleName("回复对象")
         self.targetBox.setToolTip("三条候选都按这个人来写；不选就跟着最近说话的那位")
         self.targetBox.currentIndexChanged.connect(self._on_target_selected)

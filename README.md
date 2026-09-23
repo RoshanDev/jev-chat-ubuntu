@@ -347,6 +347,7 @@ NOTICE                  出处、第三方组件许可证与商用约束
 docs/KICKOFF.md         最初的需求和硬约束说明
 docs/icon.ico           程序图标，tools/make_icon.py 生成
 docs/ui_*.png           README 里那三张截图，tools/preview_ui.py --screenshot 出的
+docs/wechat-mp.png      README 里的公众号「恸码奇点」
 config.json             你自己的设置，不进仓库（在 .gitignore 里）
 ```
 
@@ -437,6 +438,12 @@ config.json             你自己的设置，不进仓库（在 .gitignore 里�
 - 候选卡片显示 Jev 概率百分比并按概率排序
 - 设置里加「参考上下文」条数（3~30，默认 10）；key 直接读写注册表 `HKCU\Environment`
 - PyInstaller onedir 打包（`jev.spec` + `build.bat`）+ 推 `v*` tag 自动出 Release
+
+## 公众号
+
+反馈和合作走公众号「恸码奇点」。微信扫左边的码，或者搜一搜这个名字。
+
+<p align="center"><img src="docs/wechat-mp.png" width="640" alt="公众号：恸码奇点"></p>
 
 ## 致谢
 

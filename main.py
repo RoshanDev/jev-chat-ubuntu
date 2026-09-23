@@ -3,12 +3,15 @@
 冒出新的对方消息才调 engine → 悬浮窗给 3 条候选 → 人点「填入」。发送永远手动。静默期零调用。
 上下文、结果、聊天记录都按会话名（子进程 OCR 头部标题得来）分开存，切会话不串味。
 
-    pip install rapidocr-onnxruntime numpy windows-capture PySide6-Fluent-Widgets
+    pip install -r requirements.txt
+    python main.py
 两个模型（判断 Jev / 起草语言模型）的来源和 key 在独立设置页填写，不用改代码。IDE 里直接 Run。
+Linux 见 README「Ubuntu / Linux」：./start.sh
 """
 import ctypes
 import multiprocessing
 import queue
+import sys
 import threading
 import traceback
 from collections import deque
@@ -165,6 +168,9 @@ def drain():
         if kind == "area":  # 只是窗口挪了位置，坐标跟着更新，别的什么都不用动
             state["area"] = msg[1]
             continue
+        if kind == "geom":  # Linux：窗口逻辑坐标 + HiDPI scale，填入要点的是屏幕坐标
+            state["hwnd"] = msg[1]
+            continue
         if kind == "chat":  # 微信切了会话，界面跟过去（用户正浏览别的会话时也跟，微信是准的）
             state["chat"] = msg[1]
             ov.set_chat(msg[1])
@@ -257,7 +263,12 @@ def tick():
 
 if __name__ == "__main__":  # Windows 的 spawn 会让子进程重新执行本文件，没这行就无限套娃开进程
     multiprocessing.freeze_support()  # 打包成 exe 后 spawn 出来的子进程会重跑一遍 exe，没这行就无限弹界面
-    ctypes.windll.user32.SetProcessDPIAware()
+    try:
+        multiprocessing.set_start_method("spawn")
+    except RuntimeError:
+        pass  # 已经设过就别管
+    if sys.platform == "win32":
+        ctypes.windll.user32.SetProcessDPIAware()
     q = multiprocessing.Queue()
     capture_on = multiprocessing.Event()  # 父子进程共用的开关，置位=采集
     debug_on = multiprocessing.Event()  # 同上，置位=子进程往队列里送整帧给调试窗
@@ -272,6 +283,8 @@ if __name__ == "__main__":  # Windows 的 spawn 会让子进程重新执行本�
     else:
         capture_on.set()
         child = spawn_worker()
+        if isinstance(state["hwnd"], dict) and state["hwnd"].get("locked"):
+            ov.set_status("微信已锁定，请在手机微信会话列表顶部解锁后再采集", "warning")
     if settings.debug_view():  # 上次开着就直接开回来
         set_debug(True)
     if not settings.has_jev_key():

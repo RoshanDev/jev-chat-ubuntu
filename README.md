@@ -215,14 +215,40 @@ WGC 截微信窗口（GPU 合成窗口也能截，被遮挡也能截）
 下载 exe 的只看前三条；Python 只有源码运行 / 自己打包才需要。
 
 - **Windows 10 1903+ 或 Windows 11**（Windows Graphics Capture 的最低要求）
+- **或 Ubuntu 24.04+ / GNOME Wayland**（官方 Linux 微信 4.x，见下面「Ubuntu / Linux」）
 - **Python 3.10–3.12**（Releases 里的 exe 是 CI 用 3.11 打的；只想用 exe 的话不用装 Python。3.13+ 不行：rapidocr-onnxruntime 1.4.x 官方包 requires_python 封顶 <3.13，pip 会静默改装 1.2.3，启动即 KeyError）
-- **微信 Windows 4.x**（`Weixin.exe`）
+- **微信 Windows 4.x**（`Weixin.exe`）或 **官方 Linux 微信 4.x**（`/usr/bin/wechat`）
 - **两把 API key**：判断用 `JEV_API_KEY`，默认来源 [OpenRouter](https://openrouter.ai/)（或
-  [TypeSafe 直连](https://console.typesafe.ai/)）；起草用 `LLM_API_KEY`，默认
-  [DeepSeek 官网](https://platform.deepseek.com/)。详见下面「使用说明」
+ [TypeSafe 直连](https://console.typesafe.ai/)）；起草用 `LLM_API_KEY`，默认
+ [DeepSeek 官网](https://platform.deepseek.com/)。详见下面「使用说明」
 
 > Win10 上 WGC 会在微信窗口外画一圈黄框，系统不给关；Win11 才能关掉。
 > 嫌碍眼就把标题栏的采集开关拨到「已暂停」，黄框立刻消失。
+
+## Ubuntu / Linux
+
+组织里没有现成的 Linux 桌面版：Android 是 Kotlin 无障碍，macOS 绑死了 Vision / Quartz / Apple Silicon。
+**官方 Linux 微信 4.x 和 Windows 4.x 是同一套 UnifiedPC 界面**，所以这份仓库的 OCR + 气泡分色可以直接用。
+
+Windows 的 `.exe` 装不了。在 Ubuntu 上从源码跑：
+
+```bash
+git clone https://github.com/RoshanDev/jev-chat-windows.git
+cd jev-chat-windows
+./start.sh
+```
+
+`start.sh` 会用 [uv](https://docs.astral.sh/uv/) 建 Python 3.12 虚拟环境（系统自带的 3.14 跑不了 RapidOCR 1.4），采集和填入另外调用系统 Python 的 PyGObject。
+
+还需要：
+
+- GNOME + Wayland（用 Mutter ScreenCast 截微信窗口那块屏幕；被其他窗口挡住就会拍到挡着的画面，**别把悬浮窗叠在微信上**）
+- 已安装并打开的官方 Linux 微信（`wechat` 包）
+- 系统包：`python3-gi`、`gstreamer1.0-pipewire`、`wl-clipboard`（Ubuntu 桌面一般已经有）
+- 无障碍总线：设置 › 辅助功能 打开过即可；本程序用 AT-SPI 找窗口、点输入框，不读聊天正文
+- 两把 API key，保存在 GNOME 钥匙串里，不写进 `config.json`
+
+首次启动同样弹设置页。Linux 微信被手机锁定时，状态栏会提示先解锁，不会拿锁屏画面去 OCR。
 
 ## 源码运行（开发者）
 
@@ -240,8 +266,9 @@ python main.py
 PyCharm / VS Code 里直接 Run `main.py` 也行。
 
 首次启动会自动弹出设置页：填两把 key（判断 `JEV_API_KEY`、起草 `LLM_API_KEY`，见上面「使用说明」），
-选你们的关系（恋人 / 朋友 / 同事 / 家人 / 自定义）。key 写进注册表 `HKCU\Environment`，重启后依然有效，
-不落任何文件；其余设置写进项目根的 `config.json`（已在 `.gitignore` 里）。
+选你们的关系（恋人 / 朋友 / 同事 / 家人 / 自定义）。key 写进系统密钥槽（Windows 注册表
+`HKCU\Environment`，Linux 为 GNOME 钥匙串），重启后依然有效，不落任何文件；其余设置写进项目根的
+`config.json`（已在 `.gitignore` 里）。 Linux 也可以直接 `./start.sh`。
 
 ### 自己打包
 
@@ -269,11 +296,11 @@ pyinstaller --noconfirm --clean jev.spec
 | 启动时检查更新 | 开了才在启动时查一次 GitHub 最新版本号，有新版本就在标题栏下面提示 | `config.json` → `check_update`（默认开） |
 | 调试视图 | 另开一个窗口实时显示截到的画面和识别框，看识别在哪一步认错。拨一下立刻生效，不用点保存；关掉那个窗口等于关掉开关 | `config.json` → `debug_view`（默认关） |
 | 判断 · 来源 | OpenRouter 还是 TypeSafe 直连 | `config.json` → `jev_provider`（默认 `openrouter`） |
-| 判断 · 密钥 | 上面选哪家就填哪家的 key。已配置时留空 = 保留 | 注册表 `HKCU\Environment` → `JEV_API_KEY` |
+| 判断 · 密钥 | 上面选哪家就填哪家的 key。已配置时留空 = 保留 | Windows 注册表 `HKCU\Environment` / Linux 钥匙串 → `JEV_API_KEY` |
 | 判断 · 模型 | 可手打，也可点「获取模型」拉列表挑 | `config.json` → `jev_model`（空 = 该来源默认） |
 | 起草 · 来源 | 上面那张表里的任意一家 | `config.json` → `draft_provider`（默认 `deepseek`） |
 | 起草 · Base URL | 只有两个「自定义」来源才出现这一行 | `config.json` → `draft_base_url` |
-| 起草 · 密钥 | 上面选哪家就填哪家的 key。已配置时留空 = 保留 | 注册表 `HKCU\Environment` → `LLM_API_KEY` |
+| 起草 · 密钥 | 上面选哪家就填哪家的 key。已配置时留空 = 保留 | Windows 注册表 `HKCU\Environment` / Linux 钥匙串 → `LLM_API_KEY` |
 | 起草 · 模型 | 可手打，也可点「获取模型」拉列表挑 | `config.json` → `draft_model`（空 = 该来源默认） |
 | 起草时开启思考模式 | 开了模型先想再写，慢好几倍、贵一些 | `config.json` → `thinking`（默认关） |
 
@@ -307,13 +334,15 @@ pyinstaller --noconfirm --clean jev.spec
 ```
 main.py                 入口：父进程只管界面，子进程采集，队列传消息（IDE 直接 Run）
 app/                    UI + 采集层
-  capture.py            找微信窗口 + WGC 盯帧 + 像素锚点定位消息区；帧全程内存
+  capture.py            找微信窗口 + 盯帧 + 像素锚点定位消息区；帧全程内存
+  capture_linux.py      Linux：AT-SPI 找窗口，采集走系统 Python 的 Mutter ScreenCast
+  linux_helper.py       Linux 助手（系统 Python + PyGObject）：截屏 / 找窗 / 填入
   ocr.py                RapidOCR 读消息区 → 按颜色分 me/her/灰字 → 滚动去重；另读头部的会话名
   worker.py             采集子进程主循环（截图 → 定位 → OCR → 去重 → 丢队列）
   fill.py               填入不发送：写剪贴板 → 点输入框 → Ctrl+V，到此为止
   overlay.py            置顶悬浮窗：会话/回复对象、判断摘要、3 条候选、聊天记录、设置页（PySide6 + Fluent）
   debugwin.py           调试视图：另一个窗口画当前帧 + 每个识别框的分类；只在内存里画，不存图
-  settings.py           两把 key 只进注册表，其余设置落 config.json
+  settings.py           两把 key 只进系统密钥槽（Windows 注册表 / Linux 钥匙串），其余设置落 config.json
 core/                   Jev 判断内核，平台无关，跟安卓原版同一套口径
   engine.py             唯一入口 analyze(messages, relationship) → 候选 + 排序 + 判断
   providers.py          两张来源表（判断 / 起草）：协议、地址、默认模型；纯数据，不认 key
@@ -337,7 +366,8 @@ probe/                  一次性探针，结论已写进本文，留着是为�
   probe_laya_cn.py      同上，中文题问 multilingual → 更差
   probe_laya_en.py      把对话人工译成英文再喂 typed-decisions → 好一点，但生气那段仍判成闲聊
 jev.spec                PyInstaller 打包定义（onedir），build.bat 和 CI 共用这一份
-build.bat               本地一键打包（双击就行）
+build.bat               本地一键打包（双击就行，仅 Windows）
+start.sh                Ubuntu 一键：建 3.12 venv、装依赖、跑 main.py
 .github/workflows/release.yml  推 v* tag → windows-latest 上打包 → zip 挂到 Release
 requirements.txt        依赖（纯 ASCII 注释：中文 Windows 上 pip 按 GBK 读会炸）
 NOTICE                  出处、第三方组件许可证与商用约束
@@ -366,11 +396,13 @@ config.json             你自己的设置，不进仓库（在 .gitignore 里�
   代价是名字只差一个字的两个会话会被并成一个。头部一直认不出就先挂在「当前会话」名下。
 - **同一人连发两句一模一样的会吞一条**：去重按文本相似度做的。对「要不要触发分析」没影响。
 - **`fill` 靠点击输入框坐标**：算的是消息区底线下方 40px、左边界右侧 60px，微信改布局就得跟着调。
+- **Linux 截的是屏幕上的矩形**（Mutter RecordArea）：微信被挡住时拍到的是挡着的窗口，不能像 Windows WGC 那样截被遮挡的合成窗口。悬浮窗请放在微信旁边。
 - **没有托盘**：关窗口就是退出（标题栏的「最小化」是收到任务栏，不是后台常驻）。
 
 ## 更新记录
 
 **未发版**
+- Linux / Ubuntu：官方 Linux 微信 4.x 可从源码运行。采集改走 AT-SPI 找窗 + Mutter ScreenCast（PipeWire 帧在内存里），填入走 wl-copy + AT-SPI 点输入框，两把 key 进 GNOME 钥匙串；Windows 行为不变
 - 先判断再起草（issue #4）：`analyze()` 改成三段式 —— Jev 先答 7 道判断题，判断折成中文小抄喂进
   起草提示词，最后 Jev 只做排序；一次分析两次 Jev 调用。判断那次失败自动退回老路（盲起草 + 判断和
   排序一次问完），排序失败就按第一条推荐

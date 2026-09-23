@@ -62,6 +62,8 @@ def analyze(messages: list, relationship: str, model: str | None = None,
                                   base_url=base_url, timeout=timeout, keep=context,
                                   reply_to=reply_to, style=style, thinking=thinking,
                                   guidance=guidance_text(answers) if judged else None)
+    if not candidates:  # 注入过滤可以把起草结果全扔掉；接着取 [0] 会 IndexError
+        raise JevError("起草结果没有可用候选回复")
 
     questions = {} if judged else dict(JUDGE_QUESTIONS)
     if len(candidates) >= 2:  # 起草只给了 1 条就没什么可排的，判断题照问
@@ -99,3 +101,17 @@ def analyze(messages: list, relationship: str, model: str | None = None,
         "usage": usage,
         "reply_to": reply_to,
     }
+
+
+if __name__ == "__main__":
+    # 候选被过滤光时要抛 JevError，不能在取第一条时 IndexError。
+    from unittest.mock import patch
+
+    with patch("__main__.ask", return_value={"answers": {}, "usage": {}}), \
+         patch("__main__.draft_candidates", return_value=[]):
+        try:
+            analyze([("her", "hello")], "friends")
+            raise SystemExit("应当抛错")
+        except JevError as e:
+            assert "没有可用候选" in str(e)
+    print("engine ok")

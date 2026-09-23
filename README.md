@@ -1,5 +1,11 @@
 # jev-chat-windows
 
+## 公众号
+
+反馈和合作走公众号「恸码奇点」。微信扫左边的码，或者搜一搜这个名字。
+
+<p align="center"><img src="docs/wechat-mp.png" width="640" alt="公众号：恸码奇点"></p>
+
 微信（Windows 4.x）旁挂的回复辅助：本地 OCR 读屏上的对话 → Jev 判断意图/情绪 → 给出 3 条候选回复 →
 一键填入微信输入框。**发送永远手动，程序不替你按发送。**
 
@@ -438,12 +444,6 @@ config.json             你自己的设置，不进仓库（在 .gitignore 里�
 - 候选卡片显示 Jev 概率百分比并按概率排序
 - 设置里加「参考上下文」条数（3~30，默认 10）；key 直接读写注册表 `HKCU\Environment`
 - PyInstaller onedir 打包（`jev.spec` + `build.bat`）+ 推 `v*` tag 自动出 Release
-
-## 公众号
-
-反馈和合作走公众号「恸码奇点」。微信扫左边的码，或者搜一搜这个名字。
-
-<p align="center"><img src="docs/wechat-mp.png" width="640" alt="公众号：恸码奇点"></p>
 
 ## 致谢
 

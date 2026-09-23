@@ -660,7 +660,9 @@ class Overlay:
                 models = jev_client.list_models(provider, key)
             else:
                 spec = providers.DRAFT_PROVIDERS[provider]
-                models = llm.list_models(spec.protocol, base or spec.base, key)
+                models = llm.list_models(spec.protocol, base or spec.base, key, headers=spec.headers)
+                if spec.keep:  # 目录里混了别的协议时，只留这条路打得通的
+                    models = [m for m in models if spec.keep(m)]
             reason = "" if models else "这个来源没返回任何模型"
         except Exception as exc:  # 线程里漏异常会静默吞掉，按钮就永远停在禁用态
             models, reason = [], str(exc)[:120]

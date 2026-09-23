@@ -193,7 +193,7 @@ def draft_candidates(messages: list, relationship: str, provider: str = "deepsee
     call = lambda turns: chat(  # noqa: E731 —— 三个参数会变，其余每次都一样
         spec.protocol, base_url or spec.base, key, model or spec.default, SYSTEM, turns,
         temperature=1.2, max_tokens=4000 if thinking else 400, thinking=thinking,
-        extra_body=spec.extra(thinking), timeout=timeout)
+        extra_body=spec.extra(thinking), headers=spec.headers, timeout=timeout)
 
     content = call([user])
     her_recent = _her_recent(messages)

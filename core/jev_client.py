@@ -194,7 +194,6 @@ def _check_openrouter_key(key: str, timeout: float) -> None:
         with urllib.request.urlopen(req, timeout=timeout) as resp:
             resp.read()
     except urllib.error.HTTPError as exc:
-        exc.read()
         hint = {401: "密钥被拒", 403: "没有权限"}.get(exc.code, _error_body(exc)[:200])
         raise JevError(f"取模型列表 HTTP {exc.code}: {hint}") from None
     except (TimeoutError, socket.timeout):
@@ -339,6 +338,18 @@ if __name__ == "__main__":
             raise SystemExit("应当抛错")
         except JevError as e:
             assert e.status is None and "密钥被拒" in str(e) and "or-key" not in str(e)
+
+    # 401/403 以外的状态码要把响应体带出来（别提前 read 把流吃空）
+    def _fake_key_429(req, timeout=None):
+        raise urllib.error.HTTPError(OPENROUTER_KEY_URL, 429, "Too Many", {},
+                                     io.BytesIO(b'{"error":{"message":"rate limited"}}'))
+
+    with patch.object(urllib.request, "urlopen", _fake_key_429):
+        try:
+            list_models("openrouter", "or-key")
+            raise SystemExit("应当抛错")
+        except JevError as e:
+            assert "HTTP 429" in str(e) and "rate limited" in str(e)
 
     assert redact_secrets("key=ts-key or-key") == "key=[REDACTED] [REDACTED]"
     print("jev_client ok")

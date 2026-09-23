@@ -1,14 +1,16 @@
 # -*- coding: utf-8 -*-
 """浅色置顶回复助手：回复建议和独立设置页。发送始终由用户在微信确认。"""
+import os
+import sys
 import threading
 from datetime import datetime
 from math import isfinite
 from types import SimpleNamespace
 
 from PySide6.QtCore import QObject, Qt, QTimer, Signal
-from PySide6.QtGui import QColor, QFont
+from PySide6.QtGui import QColor, QFont, QPixmap
 from PySide6.QtWidgets import (
-    QApplication, QFrame, QHBoxLayout, QSizeGrip, QSizePolicy, QStackedWidget,
+    QApplication, QFrame, QHBoxLayout, QLabel, QSizeGrip, QSizePolicy, QStackedWidget,
     QVBoxLayout, QWidget,
 )
 from qfluentwidgets import (
@@ -24,6 +26,7 @@ from core import jev_client, llm, providers
 from core.questions import CHOICE_LABELS
 
 _LOG_LINES = 300
+_QR_PX = 168  # 设置页最窄 320，去掉边距后大约还能放 240；168 在屏幕上够手机扫
 _MUTED = "#68776f"
 _GREEN = "#18794e"
 _RELATIONSHIPS = [
@@ -34,6 +37,12 @@ _RELATIONSHIPS = [
 
 def _choice(answers, name):
     return CHOICE_LABELS[name].get((answers.get(name) or {}).get("choice"), "暂未判断")
+
+
+def _mp_qr_path() -> str:
+    """打包后在 _MEIPASS/docs，源码跑在仓库 docs/。"""
+    root = getattr(sys, "_MEIPASS", os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    return os.path.join(root, "docs", "wechat-qr.png")
 
 
 def _label(text="", size=14, color=None, bold=False, parent=None):
@@ -538,8 +547,28 @@ class Overlay:
         actions.addWidget(self.saveButton)
         body.addLayout(actions)
         body.addWidget(self._hint("保存后用于下一次生成的回复。"))
+        qr = _mp_qr_path()
+        if os.path.exists(qr):
+            body.addWidget(self._mp_card(qr))
         body.addStretch(1)
         self._load_settings()
+
+    def _mp_card(self, path):
+        """设置页底部的公众号码。横幅太宽，这里只放裁出来的二维码。"""
+        card = _Surface()
+        box = QVBoxLayout(card)
+        box.setContentsMargins(16, 14, 16, 16)
+        box.setSpacing(6)
+        box.addWidget(_label("公众号", 16, "#304c3c", True), 0, Qt.AlignHCenter)
+        shot = QLabel()
+        shot.setPixmap(QPixmap(path).scaled(
+            _QR_PX, _QR_PX, Qt.KeepAspectRatio, Qt.SmoothTransformation))
+        shot.setFixedSize(_QR_PX, _QR_PX)
+        shot.setAlignment(Qt.AlignCenter)
+        box.addWidget(shot, 0, Qt.AlignHCenter)
+        box.addWidget(_label("恸码奇点", 13, "#304c3c", True), 0, Qt.AlignHCenter)
+        box.addWidget(_label("微信扫码，或搜一搜这个名字。", 12, _MUTED), 0, Qt.AlignHCenter)
+        return card
 
     def _hint(self, text):
         """设置页字段下面的灰字说明：记下来，紧凑模式一起隐藏。"""

@@ -353,7 +353,8 @@ NOTICE                  出处、第三方组件许可证与商用约束
 docs/KICKOFF.md         最初的需求和硬约束说明
 docs/icon.ico           程序图标，tools/make_icon.py 生成
 docs/ui_*.png           README 里那三张截图，tools/preview_ui.py --screenshot 出的
-docs/wechat-mp.png      README 里的公众号「恸码奇点」
+docs/wechat-mp.png      README 里的公众号横幅「恸码奇点」
+docs/wechat-qr.png      设置页底部的公众号二维码，从横幅里裁出来的
 config.json             你自己的设置，不进仓库（在 .gitignore 里）
 ```
 

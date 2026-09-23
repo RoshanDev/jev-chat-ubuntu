@@ -8,7 +8,7 @@ import traceback
 
 import numpy as np
 
-from app.capture import Capture, chat_area, unminimize
+from app.capture import LOCKED_STATUS, Capture, chat_area, unminimize
 from app.ocr import Reader, read_title, similar
 
 
@@ -73,7 +73,7 @@ def run(q, hwnd, enabled, debug_on):
                     last_geom = geom
                     hwnd = geom
                 if geom.get("locked") and not lock_warned:
-                    q.put(("status", "微信已锁定，请在手机微信会话列表顶部解锁后再采集"))
+                    q.put(("status", LOCKED_STATUS))
                     lock_warned = True
                 if not geom.get("locked"):
                     lock_warned = False

@@ -1,12 +1,16 @@
 # -*- coding: utf-8 -*-
 """浅色置顶回复助手：回复建议和独立设置页。发送始终由用户在微信确认。"""
+import os
+import subprocess
+import sys
 import threading
 from datetime import datetime
 from math import isfinite
+from pathlib import Path
 from types import SimpleNamespace
 
-from PySide6.QtCore import QObject, Qt, QTimer, Signal
-from PySide6.QtGui import QColor, QFont
+from PySide6.QtCore import QCoreApplication, QObject, Qt, QTimer, Signal
+from PySide6.QtGui import QColor, QFont, QGuiApplication, QIcon
 from PySide6.QtWidgets import (
     QApplication, QFrame, QHBoxLayout, QSizeGrip, QSizePolicy, QStackedWidget,
     QVBoxLayout, QWidget,
@@ -32,8 +36,55 @@ _RELATIONSHIPS = [
 ]
 
 
+_DESKTOP_ID = "jev-chat-ubuntu"  # 与 jev-chat-ubuntu.desktop / Wayland app_id 一致，GNOME Dock 才能归组
+
+
 def _choice(answers, name):
     return CHOICE_LABELS[name].get((answers.get(name) or {}).get("choice"), "暂未判断")
+
+
+def _app_icon():
+    themed = QIcon.fromTheme(_DESKTOP_ID)
+    if not themed.isNull():
+        return themed
+    root = Path(__file__).resolve().parent.parent
+    for rel in ("docs/icon.png", "packaging/linux/jev-chat-ubuntu.svg", "docs/icon.ico"):
+        path = root / rel
+        if path.exists():
+            return QIcon(str(path))
+    return QIcon()
+
+
+def _pin_pyside_plugins():
+    """RapidOCR 会 import cv2，OpenCV 自带残缺 Qt 插件目录，抢在 PySide6 前面则窗口起不来。"""
+    try:
+        import PySide6
+    except Exception:
+        return
+    plugins = Path(PySide6.__file__).resolve().parent / "Qt" / "plugins"
+    if not plugins.is_dir():
+        return
+    os.environ["QT_PLUGIN_PATH"] = str(plugins)
+    os.environ["QT_QPA_PLATFORM_PLUGIN_PATH"] = str(plugins / "platforms")
+    QCoreApplication.setLibraryPaths([str(plugins)])
+
+
+def prepare_qt_app():
+    """Wayland 上必须在 QApplication 之前设 desktop file name，否则 Dock 图标对不上。"""
+    _pin_pyside_plugins()
+    if sys.platform.startswith("linux"):
+        QGuiApplication.setDesktopFileName(_DESKTOP_ID)
+        QApplication.setApplicationName(_DESKTOP_ID)
+        QApplication.setApplicationDisplayName("Jev · 微信回复助手")
+    app = QApplication.instance() or QApplication(sys.argv)
+    icon = _app_icon()
+    if not icon.isNull():
+        app.setWindowIcon(icon)
+    return app, icon
+
+
+def _prepare_qt_app():
+    return prepare_qt_app()
 
 
 def _label(text="", size=14, color=None, bold=False, parent=None):
@@ -155,7 +206,7 @@ class Overlay:
         """result_of(会话名) → 那个会话上次的结果或 None；切着看别的会话时用它把旧结果放回来。
         on_target_change(会话名, 人名) → 用户在群里挑了回复对象。
         on_toggle_debug(开不开) → 开关调试视图那个独立窗口。"""
-        self.app = QApplication.instance() or QApplication([])
+        self.app, icon = _prepare_qt_app()
         setTheme(Theme.LIGHT)
         setThemeColor(_GREEN, save=False)
         self.on_fill = on_fill
@@ -179,7 +230,15 @@ class Overlay:
         self.win = _MainWindow(self._relayout)
         self.win.setObjectName("assistantWindow")
         self.win.setWindowTitle("Jev · 微信回复助手")
-        self.win.setWindowFlags(Qt.Window | Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint)
+        if not icon.isNull():
+            self.win.setWindowIcon(icon)
+        flags = Qt.Window
+        if sys.platform == "win32":
+            flags |= Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint
+        else:
+            # GNOME 要能在概览 / Dock 运行区找到这扇窗；无边框置顶会被堆到 (0,0) 藏在微信后面。
+            flags |= Qt.WindowMinimizeButtonHint | Qt.WindowCloseButtonHint
+        self.win.setWindowFlags(flags)
         self.win.setStyleSheet(
             "QWidget#assistantWindow { background: #f5f7f6; border: 1px solid #dce3de; border-radius: 14px; }"
         )
@@ -248,7 +307,7 @@ class Overlay:
         self._relayout(self.win.width(), self.win.height())  # resizeEvent 补不到构造时这一次
         self.set_status("等待新消息" if settings.has_key() else "需要配置模型",
                         "idle" if settings.has_key() else "warning")
-        self.win.show()
+        self.present()
 
     def _scroll_page(self):
         scroll = ScrollArea()
@@ -1089,6 +1148,31 @@ class Overlay:
 
     def after(self, ms, fn):
         QTimer.singleShot(ms, fn)
+
+    def present(self):
+        """显示并激活。GNOME 从 Dock / 显示应用再点一次走这里，避免再开一个看不见的窗口。"""
+        screen = self.app.primaryScreen()
+        if screen is not None:
+            geo = screen.availableGeometry()
+            self.win.resize(min(440, geo.width() - 32), min(820, geo.height() - 48))
+            self.win.move(geo.right() - self.win.width() - 20, geo.top() + 24)
+        self.win.setWindowState(self.win.windowState() & ~Qt.WindowMinimized)
+        self.win.show()
+        self.win.raise_()
+        self.win.activateWindow()
+        handle = self.win.windowHandle()
+        if handle is not None:
+            handle.requestActivate()
+        if sys.platform.startswith("linux") and not getattr(self, "_opened_notified", False):
+            self._opened_notified = True
+            try:
+                subprocess.Popen(
+                    ["notify-send", "--app-name=Jev 微信回复助手", "--icon=jev-chat-ubuntu",
+                     "Jev 已打开", "若被微信挡住，按 Super 键在概览里点它，或再点一次 Dock 图标。"],
+                    stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                )
+            except OSError:
+                pass
 
     def run(self):
         self.app.exec()

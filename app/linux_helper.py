@@ -46,12 +46,27 @@ def ensure_atspi(Atspi, Gio, GLib):
     Atspi.init()
 
 
+def _showing(acc, Atspi):
+    """无障碍树上锁屏文案解锁后还在，只是被藏起来（0×0、没有 SHOWING）。只认真正画出来的。"""
+    try:
+        st = acc.get_state_set()
+        if not st.contains(Atspi.StateType.SHOWING):
+            return False
+    except Exception:
+        return False
+    try:
+        ext = acc.get_extents(Atspi.CoordType.SCREEN)
+        return ext.width > 8 and ext.height > 8
+    except Exception:
+        return True
+
+
 def _locked_in(acc, Atspi, depth=0):
     try:
         name = acc.get_name() or ""
     except Exception:
         return False
-    if "已被锁定" in name:
+    if "已被锁定" in name and _showing(acc, Atspi):
         return True
     if depth >= 6:
         return False

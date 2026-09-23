@@ -251,6 +251,28 @@ cd jev-chat-ubuntu
 
 首次启动同样弹设置页。Linux 微信被手机锁定时，状态栏会提示先解锁，不会拿锁屏画面去 OCR。
 
+### 显示应用 / Dock
+
+把图标和启动器装进当前用户目录（不用 sudo）：
+
+```bash
+./packaging/linux/install-desktop.sh
+```
+
+之后 Super 键打开「显示应用」，搜「Jev」或「微信回复」就能开。脚本也会把它钉到 GNOME 左侧 Dock。
+启动命令是 `~/.local/bin/jev-chat-ubuntu`，实际还是跑仓库里的 `./start.sh`。
+
+### 电脑微信锁定（iPhone 也能解）
+
+官方 Linux 微信和 Windows 一样，会要求**本机微信**解锁。这是腾讯的电脑端锁定，**不需要安卓手机**。iPhone 微信就能解：
+
+1. 打开 iPhone 上的「微信」，回到会话列表（聊天记录那一页，不要停在某个对话里）
+2. 列表**最顶部**会出现一条横幅，文案类似「Windows 微信已锁定」或「电脑微信已被锁定」
+3. 点那条横幅解锁；有时还要再确认一次
+4. Linux 微信锁屏消失后，助手才会 OCR 聊天
+
+没解锁时助手照样能打开、能改设置、能钉在 Dock 里；只是不采集聊天内容，避免把锁屏画面当成对话。
+
 ## 源码运行（开发者）
 
 普通使用请直接用上面的[下载即用](#下载即用推荐)。想改代码、调 prompt、自己打包才需要这一节。
@@ -369,11 +391,13 @@ probe/                  一次性探针，结论已写进本文，留着是为�
 jev.spec                PyInstaller 打包定义（onedir），build.bat 和 CI 共用这一份
 build.bat               本地一键打包（双击就行，仅 Windows）
 start.sh                Ubuntu 一键：建 3.12 venv、装依赖、跑 main.py
+packaging/linux/        GNOME 桌面入口、hicolor 图标、install-desktop.sh
 .github/workflows/release.yml  推 v* tag → windows-latest 上打包 → zip 挂到 Release
 requirements.txt        依赖（纯 ASCII 注释：中文 Windows 上 pip 按 GBK 读会炸）
 NOTICE                  出处、第三方组件许可证与商用约束
 docs/KICKOFF.md         最初的需求和硬约束说明
 docs/icon.ico           程序图标，tools/make_icon.py 生成
+docs/icon.png           Linux / Qt 用的 256px PNG，同样由 make_icon.py 生成
 docs/ui_*.png           README 里那三张截图，tools/preview_ui.py --screenshot 出的
 config.json             你自己的设置，不进仓库（在 .gitignore 里）
 ```
@@ -403,6 +427,7 @@ config.json             你自己的设置，不进仓库（在 .gitignore 里�
 ## 更新记录
 
 **未发版**
+- Ubuntu：GNOME 显示应用 / Dock 启动器（`packaging/linux/install-desktop.sh`），Linux 微信锁定提示标明 iPhone 也能解
 - 起草预设加「阶跃星辰 StepFun」（`api.stepfun.com`，默认 `step-3.5-flash`）
 - Linux / Ubuntu：官方 Linux 微信 4.x 可从源码运行。采集改走 AT-SPI 找窗 + Mutter ScreenCast（PipeWire 帧在内存里），填入走 wl-copy + AT-SPI 点输入框，两把 key 进 GNOME 钥匙串；Windows 行为不变
 - 先判断再起草（issue #4）：`analyze()` 改成三段式 —— Jev 先答 7 道判断题，判断折成中文小抄喂进

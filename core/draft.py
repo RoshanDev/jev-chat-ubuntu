@@ -155,7 +155,7 @@ def _line(m) -> str:
 
 def draft_candidates(messages: list, relationship: str, provider: str = "deepseek",
                      model: str | None = None, base_url: str | None = None,
-                     timeout: float = 30, keep: int = 10,
+                     timeout: float = 60, keep: int = 10,
                      reply_to: str | None = None, style: str = "", thinking: bool = False,
                      guidance: str | None = None) -> list[str]:
     """messages: [(from, text)] 或 [(from, text, name)]，from ∈ {her, me}，name = 群里的发言人；
@@ -192,7 +192,13 @@ def draft_candidates(messages: list, relationship: str, provider: str = "deepsee
     # max_tokens：三句话本来 400 够，但思考过程也算进 max_tokens，开了思考模式 400 会把答案截断
     # 阶跃这类默认会写 reasoning、把额度先花在思考上，关思考也得留出正文空间
     extra = spec.extra(thinking)
-    max_tokens = 4000 if thinking else (1600 if extra.get("reasoning_effort") else 400)
+    # 三句话本来 400 够。阶跃 step-5 会先写很长 reasoning，1600 也经常把 content 挤成空串。
+    if thinking:
+        max_tokens = 8000
+    elif extra.get("reasoning_effort"):
+        max_tokens = 4096
+    else:
+        max_tokens = 400
     call = lambda turns: chat(  # noqa: E731 —— 三个参数会变，其余每次都一样
         spec.protocol, base_url or spec.base, key, model or spec.default, SYSTEM, turns,
         temperature=1.2, max_tokens=max_tokens, thinking=thinking,

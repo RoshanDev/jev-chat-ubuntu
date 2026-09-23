@@ -9,6 +9,9 @@ import time
 
 import numpy as np
 
+# Linux / Windows 微信 4.x 被本机微信锁定时的状态栏文案。iPhone、Android 都能解，不需要安卓。
+LOCKED_STATUS = "微信已锁定：打开手机微信（iPhone 也可以），在会话列表最顶部点解锁横幅后再采集"
+
 
 def chat_area(full, header_h=60, scale=1):
     """消息列表区 (x0, y_top, x1, y_in, 面板底色, y_pane)，全靠像素锚点，不写死坐标，深浅主题通用：

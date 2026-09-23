@@ -16,10 +16,10 @@ import threading
 import traceback
 from collections import deque
 
-from app import settings, update, worker
-from app.capture import find_wechat_hwnd
+from app import instance, settings, update, worker
+from app.capture import LOCKED_STATUS, find_wechat_hwnd
 from app.fill import fill
-from app.overlay import Overlay
+from app.overlay import Overlay, prepare_qt_app
 from app.version import VERSION
 from core.engine import analyze
 
@@ -269,12 +269,16 @@ if __name__ == "__main__":  # Windows 的 spawn 会让子进程重新执行本�
         pass  # 已经设过就别管
     if sys.platform == "win32":
         ctypes.windll.user32.SetProcessDPIAware()
+    prepare_qt_app()
+    if instance.ping_existing():
+        sys.exit(0)
     q = multiprocessing.Queue()
     capture_on = multiprocessing.Event()  # 父子进程共用的开关，置位=采集
     debug_on = multiprocessing.Event()  # 同上，置位=子进程往队列里送整帧给调试窗
     ov = Overlay(on_fill=fill_reply, on_toggle_capture=on_toggle_capture,
                  on_target_change=on_target_change, on_toggle_debug=set_debug,
                  result_of=lambda t: chats.get(t, {}).get("result"))
+    ov._raise_server = instance.listen(ov.present)
     child = dbg = None
     try:
         state["hwnd"] = find_wechat_hwnd()
@@ -284,7 +288,7 @@ if __name__ == "__main__":  # Windows 的 spawn 会让子进程重新执行本�
         capture_on.set()
         child = spawn_worker()
         if isinstance(state["hwnd"], dict) and state["hwnd"].get("locked"):
-            ov.set_status("微信已锁定，请在手机微信会话列表顶部解锁后再采集", "warning")
+            ov.set_status(LOCKED_STATUS, "warning")
     if settings.debug_view():  # 上次开着就直接开回来
         set_debug(True)
     if not settings.has_jev_key():

@@ -11,9 +11,11 @@ from __future__ import annotations
 
 from collections import namedtuple
 
-OPENROUTER_BASE = "https://openrouter.ai/api/v1"  # OpenAI 兼容，列模型走它
+OPENROUTER_BASE = "https://openrouter.ai/api/v1"  # OpenAI 兼容；auth/key 探测也挂在它下面
 # Jev 判断只有 OpenRouter 这条路要自己拼 HTTP：typesafe_sdk 把路径写死成 /v1/systemone，打不到这个地址
 OPENROUTER_DECISIONS = "https://openrouter.ai/api/alpha/decisions"
+# 免费的密钥探测端点：Jev 模型不在 /models 目录里（列表写死），key 对不对靠它验
+OPENROUTER_KEY_URL = "https://openrouter.ai/api/v1/auth/key"
 TYPESAFE_BASE = "https://api.typesafe.ai"
 
 JEV_ENV = "JEV_API_KEY"    # 判断那把，不管选 OpenRouter 还是 TypeSafe

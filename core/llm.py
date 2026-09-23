@@ -58,7 +58,8 @@ def _openai(base_url, api_key, model, system, user_turns, temperature, max_token
             **({"extra_body": extra_body} if extra_body else {}))
     except Exception as exc:
         _fail(exc, "起草")
-    return resp.choices[0].message.content or ""
+    msg = resp.choices[0].message
+    return (msg.content or "").strip()
 
 
 def _anthropic(base_url, api_key, model, system, user_turns, temperature, max_tokens,

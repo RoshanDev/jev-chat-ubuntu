@@ -91,7 +91,7 @@ DeepSeek 官方 API（`api.deepseek.com`）国内直连，起草基本就是一�
 - **调试视图**（可选）：另开一个窗口，实时画出截到的画面和每个识别框——绿 = 我、蓝 = 对方、
   灰 = 过滤掉的灰字、橙 = 当成发言人名、红 = 当成图片丢掉、黄 = 小字丢掉，外加消息区和头部的框、
   OCR 耗时、这一帧读出来的每一行。识别不对时一眼看出是哪一步的锅。只在内存里画，不存图。
-- **两个模型都能换**：判断走 OpenRouter 或 TypeSafe 直连；起草有 11 家预设（默认 DeepSeek 官网），
+- **两个模型都能换**：判断走 OpenRouter 或 TypeSafe 直连；起草有 12 家预设（默认 DeepSeek 官网），
   OpenAI / Anthropic / Gemini 三种协议都支持，也能填自己的 Base URL。全程只要两把 key。
 - **思考模式开关**：默认关；开了模型先想再写，更斟酌但慢好几倍、贵一些。
 - **参考上下文条数**：3~30，默认 10，起草和判断都按它取最近 N 条。
@@ -126,7 +126,7 @@ DeepSeek 官方 API（`api.deepseek.com`）国内直连，起草基本就是一�
 
 什么会出网：判断（`JEV_API_KEY`）去你选的 OpenRouter 或 TypeSafe 直连；起草（`LLM_API_KEY`）发给你
 在设置里选的那家接口（DeepSeek 官网、OpenRouter、OpenAI、Moonshot、智谱、通义、硅基流动、
-Anthropic、Gemini，或者自填的 OpenAI 兼容 / Anthropic 兼容地址），加上启动时（可关）一次到
+阶跃星辰、Anthropic、Gemini，或者自填的 OpenAI 兼容 / Anthropic 兼容地址），加上启动时（可关）一次到
 GitHub 查版本号。**本项目没有任何自建服务器**，聊天内容只在触发分析的那一刻，发给你自己在设置里
 配置的那个接口，本项目不收集、不落盘、不进日志。发出去的内容固定是：**最近 N 条对话文本**（N =
 设置里的「参考上下文」，默认 10；群聊带发言人名）、**关系设置**、**你自己最近 12 条 60 字以内的短
@@ -173,6 +173,7 @@ WGC 截微信窗口（GPU 合成窗口也能截，被遮挡也能截）
 | 智谱 GLM | OpenAI | `open.bigmodel.cn/api/paas/v4` | 自己选 |
 | 通义千问 | OpenAI | `dashscope.aliyuncs.com/compatible-mode/v1` | 自己选 |
 | 硅基流动 | OpenAI | `api.siliconflow.cn/v1` | 自己选 |
+| 阶跃星辰 StepFun | OpenAI | `api.stepfun.com/v1` | `step-3.5-flash` |
 | Anthropic | Anthropic | `api.anthropic.com` | 自己选 |
 | Google Gemini | Gemini | SDK 自带 | 自己选 |
 | 自定义 · OpenAI 兼容 | OpenAI | 自己填 | 自己选 |
@@ -190,7 +191,7 @@ WGC 截微信窗口（GPU 合成窗口也能截，被遮挡也能截）
 判断那次要是挂了（限流、超时），自动退回老路：盲起草 + 一次合问，行为跟以前一样；
 排序那次挂了就按第一条推荐，判断照样显示。
 温度 1.2，`max_tokens` 400；思考模式默认关，开了会带上各家自己的思考开关、`max_tokens` 提到 4000
-（思考过程也算进去，400 会把答案截断）。思考开关只有 DeepSeek / OpenRouter / Anthropic / Gemini 认。模型只给出 1~2 条时会带着它的回答追问一次补齐，还不够就按实际
+（思考过程也算进去，400 会把答案截断）。思考开关只有 DeepSeek / OpenRouter / Anthropic / Gemini / 阶跃星辰 认。模型只给出 1~2 条时会带着它的回答追问一次补齐，还不够就按实际
 条数走（少于 2 条就不排序）。
 
 ### 为什么走 OCR
@@ -233,8 +234,8 @@ WGC 截微信窗口（GPU 合成窗口也能截，被遮挡也能截）
 Windows 的 `.exe` 装不了。在 Ubuntu 上从源码跑：
 
 ```bash
-git clone https://github.com/RoshanDev/jev-chat-windows.git
-cd jev-chat-windows
+git clone https://github.com/RoshanDev/jev-chat-ubuntu.git
+cd jev-chat-ubuntu
 ./start.sh
 ```
 
@@ -402,11 +403,12 @@ config.json             你自己的设置，不进仓库（在 .gitignore 里�
 ## 更新记录
 
 **未发版**
+- 起草预设加「阶跃星辰 StepFun」（`api.stepfun.com`，默认 `step-3.5-flash`）
 - Linux / Ubuntu：官方 Linux 微信 4.x 可从源码运行。采集改走 AT-SPI 找窗 + Mutter ScreenCast（PipeWire 帧在内存里），填入走 wl-copy + AT-SPI 点输入框，两把 key 进 GNOME 钥匙串；Windows 行为不变
 - 先判断再起草（issue #4）：`analyze()` 改成三段式 —— Jev 先答 7 道判断题，判断折成中文小抄喂进
   起草提示词，最后 Jev 只做排序；一次分析两次 Jev 调用。判断那次失败自动退回老路（盲起草 + 判断和
   排序一次问完），排序失败就按第一条推荐
-- 设置页「模型」卡片：判断 · Jev（OpenRouter / TypeSafe 直连）+ 起草 · 语言模型（11 家预设 + 自定义
+- 设置页「模型」卡片：判断 · Jev（OpenRouter / TypeSafe 直连）+ 起草 · 语言模型（12 家预设 + 自定义
   Base URL），三种协议一律走官方 SDK（`openai` / `anthropic` / `google-genai`），可点「获取模型」拉
   接口的真实列表；**key 收敛成两把** `JEV_API_KEY` / `LLM_API_KEY`，换来源复用同一个槽，老的
   `OPENROUTER_API_KEY` / `DEEPSEEK_API_KEY` 仍能读到，保存一次自动迁移

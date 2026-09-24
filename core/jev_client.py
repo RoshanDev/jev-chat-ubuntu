@@ -17,11 +17,11 @@ import urllib.request
 from typing import NoReturn
 
 try:  # 当模块导入 / 当脚本直接跑 都能用
-    from .providers import (ENV_VARS, JEV_ENV, JEV_PROVIDERS, LEGACY, OPENROUTER_BASE,
-                            OPENROUTER_DECISIONS, TYPESAFE_BASE)
+    from .providers import (ENV_VARS, JEV_ENV, JEV_PROVIDERS, LEGACY,
+                            OPENROUTER_DECISIONS, OPENROUTER_KEY_URL, TYPESAFE_BASE)
 except ImportError:
-    from providers import (ENV_VARS, JEV_ENV, JEV_PROVIDERS, LEGACY, OPENROUTER_BASE,
-                           OPENROUTER_DECISIONS, TYPESAFE_BASE)
+    from providers import (ENV_VARS, JEV_ENV, JEV_PROVIDERS, LEGACY,
+                           OPENROUTER_DECISIONS, OPENROUTER_KEY_URL, TYPESAFE_BASE)
 
 MAX_RETRIES = 3
 
@@ -185,6 +185,24 @@ def _ask_openrouter(state: dict, questions: dict, key: str, model: str, timeout:
     )
 
 
+def _check_openrouter_key(key: str, timeout: float) -> None:
+    """免费的 auth/key 探测：401/403 说明 key 不对，别的错（超时/断网）也如实上报。
+    列表本身是写死的，key 对不对只有靠它才知道，别等第一次判断才暴露。"""
+    req = urllib.request.Request(OPENROUTER_KEY_URL,
+                                 headers={"Authorization": f"Bearer {key}"})
+    try:
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
+            resp.read()
+    except urllib.error.HTTPError as exc:
+        hint = {401: "密钥被拒", 403: "没有权限"}.get(exc.code, _error_body(exc)[:200])
+        raise JevError(f"取模型列表 HTTP {exc.code}: {hint}") from None
+    except (TimeoutError, socket.timeout):
+        raise JevError(f"取模型列表请求超时（{timeout}s）") from None
+    except urllib.error.URLError as exc:
+        raise JevError(
+            f"取模型列表失败: {redact_secrets(getattr(exc, 'reason', exc))}") from None
+
+
 def list_models(provider: str, key: str, timeout: float = 10) -> list[str]:
     """某家能用的 Jev 模型 id，去重排序。失败抛 JevError（设置页直接显示这句话）。"""
     if provider == "typesafe":
@@ -196,13 +214,11 @@ def list_models(provider: str, key: str, timeout: float = 10) -> list[str]:
                 return sorted({m.name for m in client.models.list().models})
         except Exception as exc:
             _fail(exc, "取模型列表")
-    try:  # 只在这儿 import：llm 模块头上要 jev_client 的 _fail，放模块级就转圈了
-        from .llm import list_models as _models
-    except ImportError:
-        from llm import list_models as _models
-    # OpenRouter 上几百个模型，只有 typesafe/ 这几个是 Jev
-    return [i for i in _models("openai", OPENROUTER_BASE, key, timeout)
-            if i.startswith("typesafe/")]
+    # OpenRouter 的 Jev 是 Decisions API 专属模型，不在 /api/v1/models 目录里
+    # （也没有列它的专用端点），列表按官方模型页写死，别名列排最前（永远指向最新版）。
+    # key 对不对由探测兜着，别让坏密钥等到第一次判断才暴露。
+    _check_openrouter_key(key, timeout)
+    return ["~typesafe/jev-latest", "typesafe/jev-1.13"]
 
 
 if __name__ == "__main__":
@@ -301,9 +317,39 @@ if __name__ == "__main__":
     assert seen["url"] == OPENROUTER_DECISIONS
     assert seen["body"]["model"] == "typesafe/jev-1.13" and seen["body"]["questions"] == questions
 
-    with patch("llm.list_models" if __package__ is None else "core.llm.list_models",
-               lambda *a, **k: ["openai/gpt-4o", "typesafe/jev-1.13", "typesafe/jev-preview"]):
-        assert list_models("openrouter", "or-key") == ["typesafe/jev-1.13", "typesafe/jev-preview"]
+    # OpenRouter 路的列表是写死的，但 key 要过 auth/key 探测：mock urlopen 验两头
+    def _fake_key_ok(req, timeout=None):
+        seen["key_url"] = req.full_url
+        assert req.headers["Authorization"] == "Bearer or-key"
+        return io.BytesIO(b'{"data":{}}')
+
+    with patch.object(urllib.request, "urlopen", _fake_key_ok):
+        assert list_models("openrouter", "or-key") == [
+            "~typesafe/jev-latest", "typesafe/jev-1.13"]
+    assert seen["key_url"] == OPENROUTER_KEY_URL
+
+    def _fake_key_rejected(req, timeout=None):
+        raise urllib.error.HTTPError(OPENROUTER_KEY_URL, 401, "Unauthorized", {},
+                                     io.BytesIO(b'{"error":{"message":"bad key or-key"}}'))
+
+    with patch.object(urllib.request, "urlopen", _fake_key_rejected):
+        try:
+            list_models("openrouter", "or-key")
+            raise SystemExit("应当抛错")
+        except JevError as e:
+            assert e.status is None and "密钥被拒" in str(e) and "or-key" not in str(e)
+
+    # 401/403 以外的状态码要把响应体带出来（别提前 read 把流吃空）
+    def _fake_key_429(req, timeout=None):
+        raise urllib.error.HTTPError(OPENROUTER_KEY_URL, 429, "Too Many", {},
+                                     io.BytesIO(b'{"error":{"message":"rate limited"}}'))
+
+    with patch.object(urllib.request, "urlopen", _fake_key_429):
+        try:
+            list_models("openrouter", "or-key")
+            raise SystemExit("应当抛错")
+        except JevError as e:
+            assert "HTTP 429" in str(e) and "rate limited" in str(e)
 
     assert redact_secrets("key=ts-key or-key") == "key=[REDACTED] [REDACTED]"
     print("jev_client ok")

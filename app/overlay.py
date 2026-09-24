@@ -9,11 +9,11 @@ from math import isfinite
 from pathlib import Path
 from types import SimpleNamespace
 
-from PySide6.QtCore import QCoreApplication, QObject, Qt, QTimer, Signal
-from PySide6.QtGui import QColor, QFont, QGuiApplication, QIcon
+from PySide6.QtCore import QCoreApplication, QObject, QSize, Qt, QTimer, Signal
+from PySide6.QtGui import QColor, QFont, QGuiApplication, QIcon, QPixmap
 from PySide6.QtWidgets import (
-    QApplication, QFrame, QHBoxLayout, QSizeGrip, QSizePolicy, QStackedWidget,
-    QVBoxLayout, QWidget,
+    QApplication, QFrame, QHBoxLayout, QLabel, QPushButton, QSizeGrip, QSizePolicy,
+    QStackedWidget, QVBoxLayout, QWidget,
 )
 from qfluentwidgets import (
     BodyLabel, CardWidget, CheckBox, ComboBox, EditableComboBox, FluentIcon as FIF,
@@ -85,6 +85,74 @@ def prepare_qt_app():
 
 def _prepare_qt_app():
     return prepare_qt_app()
+
+
+def _mp_banner_path() -> str:
+    """打包后在 _MEIPASS/docs，源码跑在仓库 docs/。"""
+    root = getattr(sys, "_MEIPASS", os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    return os.path.join(root, "docs", "wechat-mp.png")
+
+
+class _MpBanner(QLabel):
+    """公众号长条横幅，宽度跟着设置页走，高度按原图比例。"""
+
+    def __init__(self, path, parent=None):
+        super().__init__(parent)
+        self._src = QPixmap(path)
+        self._shown = 0
+        self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+
+    def hasHeightForWidth(self):
+        return True
+
+    def heightForWidth(self, w):
+        if self._src.isNull() or w <= 0 or self._src.width() <= 0:
+            return 0
+        return max(1, round(w * self._src.height() / self._src.width()))
+
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        w = self.width()
+        if w <= 0 or w == self._shown or self._src.isNull():
+            return
+        h = self.heightForWidth(w)
+        self._shown = w
+        self.setPixmap(self._src.scaled(w, h, Qt.KeepAspectRatio, Qt.SmoothTransformation))
+        if self.height() != h:
+            self.setFixedHeight(h)
+
+
+class _FitCombo(ComboBox):
+    """长名字不撑开窄布局。按钮上按当前宽度省略；条目仍是全文，findText 靠它。"""
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self._full = ""
+        self.setMinimumWidth(0)
+        self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+
+    def setText(self, text):
+        self._full = text or ""
+        QPushButton.setText(self, self._elide(self._full))
+        if self._full and self.text() != self._full:
+            self.setToolTip(self._full)
+
+    def minimumSizeHint(self):
+        hint = QPushButton.minimumSizeHint(self)
+        return QSize(48, hint.height())
+
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        shown = self._elide(self._full)
+        if shown != self.text():
+            QPushButton.setText(self, shown)
+        if self._full and shown != self._full:
+            self.setToolTip(self._full)
+
+    def _elide(self, text):
+        # 右侧箭头大约 28px。还没排上版时先按一个窄宽度省略，避免最小宽度被整句名字撑开。
+        avail = self.width() - 36 if self.width() > 64 else 120
+        return self.fontMetrics().elidedText(text, Qt.ElideRight, max(24, avail))
 
 
 def _label(text="", size=14, color=None, bold=False, parent=None):
@@ -371,8 +439,7 @@ class Overlay:
         prefix = _label("当前会话", 12, _MUTED)
         prefix.setFixedWidth(56)
         chat_row.addWidget(prefix)
-        self.chatBox = ComboBox()
-        self.chatBox.setMinimumWidth(0)  # 别让会话名的长度撑开整行，宽度交给 stretch
+        self.chatBox = _FitCombo()
         self.chatBox.setPlaceholderText("尚未识别到会话")
         self.chatBox.setAccessibleName("当前会话")
         self.chatBox.setToolTip("微信切到哪个会话这里就跟到哪个；也可以自己选一个，只看它的记录和建议")
@@ -390,8 +457,7 @@ class Overlay:
         target_prefix = _label("回复对象", 12, _MUTED)
         target_prefix.setFixedWidth(56)
         target_row.addWidget(target_prefix)
-        self.targetBox = ComboBox()
-        self.targetBox.setMinimumWidth(0)  # 人名长度不定，别让它撑开整行
+        self.targetBox = _FitCombo()
         self.targetBox.setAccessibleName("回复对象")
         self.targetBox.setToolTip("三条候选都按这个人来写；不选就跟着最近说话的那位")
         self.targetBox.currentIndexChanged.connect(self._on_target_selected)
@@ -605,6 +671,9 @@ class Overlay:
         actions.addWidget(self.saveButton)
         body.addLayout(actions)
         body.addWidget(self._hint("保存后用于下一次生成的回复。"))
+        banner = _mp_banner_path()
+        if os.path.exists(banner):
+            body.addWidget(_MpBanner(banner))
         body.addStretch(1)
         self._load_settings()
 
@@ -727,7 +796,9 @@ class Overlay:
                 models = jev_client.list_models(provider, key)
             else:
                 spec = providers.DRAFT_PROVIDERS[provider]
-                models = llm.list_models(spec.protocol, base or spec.base, key)
+                models = llm.list_models(spec.protocol, base or spec.base, key, headers=spec.headers)
+                if spec.keep:  # 目录里混了别的协议时，只留这条路打得通的
+                    models = [m for m in models if spec.keep(m)]
             reason = "" if models else "这个来源没返回任何模型"
         except Exception as exc:  # 线程里漏异常会静默吞掉，按钮就永远停在禁用态
             models, reason = [], str(exc)[:120]

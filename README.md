@@ -1,5 +1,11 @@
 # jev-chat-windows
 
+## 公众号
+
+反馈和合作走公众号「恸码奇点」。微信扫左边的码，或者搜一搜这个名字。
+
+<p align="center"><img src="docs/wechat-mp.png" width="640" alt="公众号：恸码奇点"></p>
+
 微信（Windows 4.x）旁挂的回复辅助：本地 OCR 读屏上的对话 → Jev 判断意图/情绪 → 给出 3 条候选回复 →
 一键填入微信输入框。**发送永远手动，程序不替你按发送。**
 
@@ -91,7 +97,7 @@ DeepSeek 官方 API（`api.deepseek.com`）国内直连，起草基本就是一�
 - **调试视图**（可选）：另开一个窗口，实时画出截到的画面和每个识别框——绿 = 我、蓝 = 对方、
   灰 = 过滤掉的灰字、橙 = 当成发言人名、红 = 当成图片丢掉、黄 = 小字丢掉，外加消息区和头部的框、
   OCR 耗时、这一帧读出来的每一行。识别不对时一眼看出是哪一步的锅。只在内存里画，不存图。
-- **两个模型都能换**：判断走 OpenRouter 或 TypeSafe 直连；起草有 12 家预设（默认 DeepSeek 官网），
+- **两个模型都能换**：判断走 OpenRouter 或 TypeSafe 直连；起草有 13 家预设（默认 DeepSeek 官网），
   OpenAI / Anthropic / Gemini 三种协议都支持，也能填自己的 Base URL。全程只要两把 key。
 - **思考模式开关**：默认关；开了模型先想再写，更斟酌但慢好几倍、贵一些。
 - **参考上下文条数**：3~30，默认 10，起草和判断都按它取最近 N 条。
@@ -126,7 +132,7 @@ DeepSeek 官方 API（`api.deepseek.com`）国内直连，起草基本就是一�
 
 什么会出网：判断（`JEV_API_KEY`）去你选的 OpenRouter 或 TypeSafe 直连；起草（`LLM_API_KEY`）发给你
 在设置里选的那家接口（DeepSeek 官网、OpenRouter、OpenAI、Moonshot、智谱、通义、硅基流动、
-阶跃星辰、Anthropic、Gemini，或者自填的 OpenAI 兼容 / Anthropic 兼容地址），加上启动时（可关）一次到
+阶跃星辰、OpenCode Go、Anthropic、Gemini，或者自填的 OpenAI 兼容 / Anthropic 兼容地址），加上启动时（可关）一次到
 GitHub 查版本号。**本项目没有任何自建服务器**，聊天内容只在触发分析的那一刻，发给你自己在设置里
 配置的那个接口，本项目不收集、不落盘、不进日志。发出去的内容固定是：**最近 N 条对话文本**（N =
 设置里的「参考上下文」，默认 10；群聊带发言人名）、**关系设置**、**你自己最近 12 条 60 字以内的短
@@ -174,12 +180,15 @@ WGC 截微信窗口（GPU 合成窗口也能截，被遮挡也能截）
 | 通义千问 | OpenAI | `dashscope.aliyuncs.com/compatible-mode/v1` | 自己选 |
 | 硅基流动 | OpenAI | `api.siliconflow.cn/v1` | 自己选 |
 | 阶跃星辰 StepFun | OpenAI | `api.stepfun.com/v1` | `step-3.5-flash` |
+| OpenCode Go | OpenAI | `opencode.ai/zen/go/v1` | `deepseek-v4.1-flash` |
 | Anthropic | Anthropic | `api.anthropic.com` | 自己选 |
 | Google Gemini | Gemini | SDK 自带 | 自己选 |
 | 自定义 · OpenAI 兼容 | OpenAI | 自己填 | 自己选 |
 | 自定义 · Anthropic 兼容 | Anthropic | 自己填 | 自己选 |
 
 没有默认模型的来源，在设置页点「获取模型」拉一次列表自己挑（也能直接手打模型 id）。
+OpenCode Go 的列表只留走 `/chat/completions` 的模型（DeepSeek、GLM、Kimi、MiMo 等）；
+MiniMax、Qwen 走 `/messages`，Grok、GPT 走 `/responses`，选了会失败，所以不放进下拉框。
 三种协议各走自家官方 SDK（`openai` / `anthropic` / `google-genai`），不自己拼 HTTP；
 判断那条 OpenRouter 的路是唯一的例外——`typesafe-sdk` 把路径写死成 `/v1/systemone`，
 打不到 OpenRouter 的 `/api/alpha/decisions`。
@@ -399,6 +408,7 @@ docs/KICKOFF.md         最初的需求和硬约束说明
 docs/icon.ico           程序图标，tools/make_icon.py 生成
 docs/icon.png           Linux / Qt 用的 256px PNG，同样由 make_icon.py 生成
 docs/ui_*.png           README 里那三张截图，tools/preview_ui.py --screenshot 出的
+docs/wechat-mp.png      公众号「恸码奇点」长条横幅，README 标题下和设置页底部共用
 config.json             你自己的设置，不进仓库（在 .gitignore 里）
 ```
 
@@ -430,9 +440,20 @@ config.json             你自己的设置，不进仓库（在 .gitignore 里�
 - Ubuntu：GNOME 显示应用 / Dock 启动器（`packaging/linux/install-desktop.sh`），Linux 微信锁定提示标明 iPhone 也能解
 - 起草预设加「阶跃星辰 StepFun」（`api.stepfun.com`，默认 `step-3.5-flash`）
 - Linux / Ubuntu：官方 Linux 微信 4.x 可从源码运行。采集改走 AT-SPI 找窗 + Mutter ScreenCast（PipeWire 帧在内存里），填入走 wl-copy + AT-SPI 点输入框，两把 key 进 GNOME 钥匙串；Windows 行为不变
+
+**v0.1.10**
 - 先判断再起草（issue #4）：`analyze()` 改成三段式 —— Jev 先答 7 道判断题，判断折成中文小抄喂进
   起草提示词，最后 Jev 只做排序；一次分析两次 Jev 调用。判断那次失败自动退回老路（盲起草 + 判断和
   排序一次问完），排序失败就按第一条推荐
+- 设置页可开「识别调试」窗口，实时显示消息区、会话名区域、OCR 分类框、提取出的消息和耗时；默认关闭，
+  截图只在内存里传递
+- 起草来源新增 OpenCode Go；OpenRouter 的 Jev 模型列表改为列出 Decisions API 模型并单独校验密钥，
+  429 等错误保留服务端返回的原因
+- 修：Win10 1909 上采集不再切换不受支持的光标/边框选项；候选被过滤光时明确报错；长会话名和回复对象名
+  在窄窗口按宽度省略，选项里仍保留完整名称
+- 源码安装说明明确 Python 3.10–3.12；README 和设置页加入公众号「恸码奇点」入口
+
+**v0.1.9**
 - 设置页「模型」卡片：判断 · Jev（OpenRouter / TypeSafe 直连）+ 起草 · 语言模型（12 家预设 + 自定义
   Base URL），三种协议一律走官方 SDK（`openai` / `anthropic` / `google-genai`），可点「获取模型」拉
   接口的真实列表；**key 收敛成两把** `JEV_API_KEY` / `LLM_API_KEY`，换来源复用同一个槽，老的

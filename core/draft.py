@@ -159,7 +159,7 @@ def draft_candidates(messages: list, relationship: str, provider: str = "deepsee
                      reply_to: str | None = None, style: str = "", thinking: bool = False,
                      guidance: str | None = None) -> list[str]:
     """messages: [(from, text)] 或 [(from, text, name)]，from ∈ {her, me}，name = 群里的发言人；
-    只看最近 keep 条。返回最多 3 条中文候选（模型两次都给不够时可能少于 3，至少 1）。
+    只看最近 keep 条。返回最多 3 条中文候选（过滤后可能是 0 条，调用方要处理）。
 
     reply_to: 群聊里指定回复给谁；None = 正常回复。
     style: 用户自己描述的口吻（设置里的「说话风格」），空就只靠样本模仿。
@@ -202,7 +202,7 @@ def draft_candidates(messages: list, relationship: str, provider: str = "deepsee
     call = lambda turns: chat(  # noqa: E731 —— 三个参数会变，其余每次都一样
         spec.protocol, base_url or spec.base, key, model or spec.default, SYSTEM, turns,
         temperature=1.2, max_tokens=max_tokens, thinking=thinking,
-        extra_body=extra, timeout=timeout)
+        extra_body=extra, headers=spec.headers, timeout=timeout)
 
     content = call([user])
     her_recent = _her_recent(messages)

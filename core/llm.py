@@ -107,14 +107,14 @@ def _anthropic(base_url, api_key, model, system, user_turns, temperature, max_to
     extra = {}
     if thinking:
         extra["thinking"] = {"type": "enabled", "budget_tokens": _THINK_BUDGET}
-        temperature = 1.0  # 开了思考，Anthropic 只收 temperature=1
         max_tokens = max(max_tokens, _THINK_BUDGET + 1024)  # max_tokens 得装得下思考 + 正文
     try:
         client = anthropic.Anthropic(base_url=base_url or None, api_key=api_key,
                                      timeout=timeout, max_retries=2)
+        # anthropic>=1.8 的 Messages.create 已无 temperature，采样走模型默认
         message = client.messages.create(model=model, system=system,
                                          messages=_turns(user_turns), max_tokens=max_tokens,
-                                         temperature=temperature, **extra)
+                                         **extra)
     except Exception as exc:
         _fail(exc, "起草")
     # 开了思考的话前面还有 thinking 块，只取文本块
@@ -242,15 +242,15 @@ if __name__ == "__main__":
         "system", "user", "assistant", "user"]
     assert seen["openai.init"]["base_url"] is None  # 空 base_url = 用 SDK 默认地址
 
-    # Anthropic：system 单独传，思考是协议自带参数，开了必须 temperature=1 且 max_tokens 装得下预算
+    # Anthropic：system 单独传，思考是协议自带参数；Messages.create 不再收 temperature
     assert chat("anthropic", "https://api.anthropic.com", "sk-an", "claude-x", "S", ["U"],
                 temperature=1.2, max_tokens=400) == "嗯"
     assert seen["anthropic.call"]["system"] == "S" and "thinking" not in seen["anthropic.call"]
     assert seen["anthropic.call"]["messages"] == [{"role": "user", "content": "U"}]
-    assert seen["anthropic.call"]["temperature"] == 1.2
+    assert "temperature" not in seen["anthropic.call"]
     chat("anthropic", "", "k", "claude-x", "S", ["U"], temperature=1.2, max_tokens=400, thinking=True)
     assert seen["anthropic.call"]["thinking"] == {"type": "enabled", "budget_tokens": _THINK_BUDGET}
-    assert seen["anthropic.call"]["temperature"] == 1.0
+    assert "temperature" not in seen["anthropic.call"]
     assert seen["anthropic.call"]["max_tokens"] > _THINK_BUDGET
 
     # Gemini：助手那一轮叫 model；关思考 = thinking_budget 0，开 = 不传让模型自己定

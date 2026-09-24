@@ -13,11 +13,13 @@ import multiprocessing
 import queue
 import sys
 import threading
+import time
 import traceback
 from collections import deque
 
 from app import instance, settings, update, worker
 from app.capture import LOCKED_STATUS, find_wechat_hwnd
+from app.ocr import similar
 from app.fill import fill
 from app.overlay import Overlay, prepare_qt_app
 from app.version import VERSION
@@ -51,10 +53,6 @@ def fill_reply(text):
         raise RuntimeError("未找到微信窗口，请确认微信已打开")
     if state["area"] is None:
         raise RuntimeError("微信输入区域尚不可用，请确认微信聊天窗口可见（不要最小化）")
-    if settings.reply_target() and ov.at_prefix_enabled():
-        target = target_of(ov.current_chat())  # 填进去的是界面上正看着的那个会话的对象
-        if target:
-            text = f"@{target} " + text  # 纯文本，微信不认成真正的 @，只是让群里看得出在跟谁说
     fill(state["hwnd"], state["area"], text)
 
 
@@ -136,6 +134,8 @@ def start_analyze(title, msgs):
         ov.set_status(f"起草来源 {settings.draft_provider_name()} 没填密钥，去设置里补上", "warning")
         return
     state["busy"] = True
+    state["busy_since"] = time.monotonic()
+    state["analyzing_her"] = next((m[1] for m in reversed(msgs) if m[0] == "her"), None)
     ov.set_busy(True)
     reply_to = target_of(title) if settings.reply_target() else None  # 开关关着就是今天的行为
     threading.Thread(target=analyze_bg, args=(msgs, title, chat_of(title)["rev"], reply_to),
@@ -206,6 +206,10 @@ def drain():
         _, title, new, area = msg
         state["area"] = area
         chat = chat_of(title)
+        new = [(who, name, text) for who, name, text in new
+               if not any(h[0] == who and similar(h[1], text) for h in chat["history"])]
+        if not new:
+            continue
         chat["rev"] += 1  # 这个会话有新消息了，它在跑的分析作废
         if title == ov.current_chat():  # 看的是别的会话就别把人家的候选划掉
             ov.invalidate_replies()
@@ -236,17 +240,16 @@ def tick():
         while not update_result.empty():
             latest, url = update_result.get()
             ov.set_update(latest, url)
+        if state["busy"] and time.monotonic() - state.get("busy_since", 0) > 120:
+            state["busy"] = False
+            state["rerun"] = None
+            ov.set_busy(False)
+            ov.set_status("生成超时，多半是网络或模型太慢。打开采集后等下一条会重试。", "error")
         while not results.empty():
             kind, r, title, revision = results.get()
+            rerun, state["rerun"] = state["rerun"], None
             state["busy"] = False
-            if state["rerun"]:  # 分析期间又来了新消息，接着跑最新的
-                (t, msgs), state["rerun"] = state["rerun"], None
-                start_analyze(t, msgs)
-                continue
-            if revision != chat_of(title)["rev"]:  # 这个会话后来又说话了，这份结果过期了
-                ov.set_busy(False)
-                continue
-            if kind == "ok":
+            if kind == "ok" and r and r.get("candidates"):
                 chat_of(title)["result"] = r  # 先存着；正看着这个会话才立刻贴上去
                 if title == ov.current_chat():
                     ov.show(r)
@@ -254,8 +257,18 @@ def tick():
                     ov.set_busy(False)
             else:
                 ov.set_busy(False)
-                ov.set_status("生成失败，请检查网络和服务设置；新消息到来后会重试。", "error")
-                ov.log(r)
+                if kind != "ok":
+                    hint = str(r).strip() or "生成失败，请检查网络和服务设置"
+                    ov.set_status(hint[:160] + ("…" if len(hint) > 160 else "")
+                                  + "；新消息到来后会重试。", "error")
+                    ov.log(r)
+            if rerun:
+                t, msgs = rerun
+                last = next((m[1] for m in reversed(msgs) if m[0] == "her"), None)
+                prev = state.get("analyzing_her")
+                if last and prev and similar(last, prev):
+                    continue
+                start_analyze(t, msgs)
     except Exception:
         traceback.print_exc()  # 一帧出错不退出
     ov.after(50, tick)

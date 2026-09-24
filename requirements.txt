@@ -9,7 +9,7 @@ keyring; sys_platform == "linux"  # GNOME Keyring / Secret Service for the two A
 # model SDKs: one official client per protocol, no hand-written HTTP (see core/llm.py)
 openai                        # OpenAI Chat Completions: DeepSeek, OpenRouter, Moonshot, GLM, Qwen, ...
 typesafe-sdk                  # Jev judging over TypeSafe direct (api.typesafe.ai)
-anthropic                     # Anthropic Messages
+anthropic>=1.8                # Anthropic Messages；1.8 起 create() 无 temperature
 google-genai                  # Google Gemini
 
 # optional, only for the two old UIA probes (already disproved; install to reproduce)

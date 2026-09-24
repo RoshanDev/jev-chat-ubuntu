@@ -28,12 +28,15 @@ def gi_python():
 def _run_helper(args, **kw):
     env = os.environ.copy()
     env.setdefault("PYTHONUNBUFFERED", "1")
-    return subprocess.run(
-        [gi_python(), _HELPER, *args], env=env,
-        stdout=kw.get("stdout", subprocess.PIPE),
-        stderr=kw.get("stderr", subprocess.PIPE),
-        input=kw.get("input"), timeout=kw.get("timeout", 8), check=False,
-    )
+    try:
+        return subprocess.run(
+            [gi_python(), _HELPER, *args], env=env,
+            stdout=kw.get("stdout", subprocess.PIPE),
+            stderr=kw.get("stderr", subprocess.PIPE),
+            input=kw.get("input"), timeout=kw.get("timeout", 8), check=False,
+        )
+    except subprocess.TimeoutExpired:
+        raise RuntimeError("操作超时：" + " ".join(args))
 
 
 def find_wechat_hwnd():

@@ -286,6 +286,16 @@ def cmd_fill(cx, cy, text):
     except FileNotFoundError as e:
         raise RuntimeError("需要 wl-copy（包 wl-clipboard）才能填入") from e
     time.sleep(0.05)
+    # 先点微信标题栏把键盘焦点从助手抢走，否则 Ctrl+V 会粘进 Jev，
+    # 而助手主线程若还在等本进程，合成键会把两边卡死。
+    try:
+        w = find_wechat(Atspi)
+        tx = int(w["x"] + min(80, max(w["w"] // 4, 24)))
+        ty = int(w["y"] + 12)
+        Atspi.generate_mouse_event(tx, ty, "b1c")
+        time.sleep(0.12)
+    except Exception:
+        pass
     Atspi.generate_mouse_event(int(cx), int(cy), "abs")
     time.sleep(0.03)
     Atspi.generate_mouse_event(int(cx), int(cy), "b1c")

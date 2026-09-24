@@ -132,6 +132,11 @@ class _Fetched(QObject):
     done = Signal(object, list, str)
 
 
+class _FillDone(QObject):
+    """填入微信的后台线程 → 主线程。err / stack 成功时都是空串。"""
+    done = Signal(str, str)
+
+
 class _TitleBar(QWidget):
     """只有标题栏可拖动，选择正文或按按钮不会意外移动窗口。"""
     def __init__(self, parent):
@@ -218,6 +223,9 @@ class Overlay:
         self.cards = []
         self._busy = False
         self._current = False
+        self._filling = False
+        self._fill_done = _FillDone()
+        self._fill_done.done.connect(self._on_fill_done)
         self._compact = None  # 断点模式：None 保证 _relayout 第一次调用必定生效
         self._pageLayouts = []
         self._hintLabels = []
@@ -850,18 +858,42 @@ class Overlay:
         self.settingsButton.setEnabled(True)
 
     def _fill(self, index):
-        if self._busy or not self._current or index >= len(self.cands):
+        if self._filling or not self._current or index >= len(self.cands):
             return
+        text = self.cands[index]
+        if settings.reply_target() and self.at_prefix_enabled():
+            target = (self.targets.get(self.current_chat()) or ([], None))[1]
+            if target:
+                text = f"@{target} " + text
+        self._filling = True
+        for card in self.cards:
+            card.fillButton.setEnabled(False)
+        self.set_status("正在填入微信…", "busy")
+        threading.Thread(target=self._fill_worker, args=(text,), daemon=True).start()
+
+    def _fill_worker(self, text):
         try:
-            self.on_fill(self.cands[index])
+            self.on_fill(text)
         except Exception as e:
-            # 状态栏保持友好文案；真实原因和压缩堆栈进聊天记录，认得出是哪一步炸的
             import traceback
-            self.set_status("未能填入，请确认微信窗口可用后重试，或复制回复。", "error")
-            self.log(f"[填入失败] {type(e).__name__}: {e}")
-            self.log(f"[填入失败堆栈] {' '.join(traceback.format_exc().split())[:300]}")
+            self._fill_done.done.emit(
+                f"{type(e).__name__}: {e}",
+                " ".join(traceback.format_exc().split())[:300],
+            )
             return
-        self.set_status("已尝试填入，请在微信确认内容后发送。", "success")
+        self._fill_done.done.emit("", "")
+
+    def _on_fill_done(self, err, stack):
+        self._filling = False
+        for card in self.cards:
+            card.set_available(self._current and not self._busy)
+        if err:
+            self.set_status("未能填入，请确认微信窗口可用后重试，或复制回复。", "error")
+            self.log(f"[填入失败] {err}")
+            if stack:
+                self.log(f"[填入失败堆栈] {stack}")
+        else:
+            self.set_status("已尝试填入，请在微信确认内容后发送。", "success")
 
     def _copy(self, index):
         if self._busy or not self._current or index >= len(self.cands):
@@ -892,7 +924,12 @@ class Overlay:
         """开关状态对应的状态行和空态文案。已有的候选不受影响，暂停了照样能填入/复制。"""
         configured = settings.has_key()
         if not on:
-            self.set_status(reason or "采集已暂停，微信内容不再读取", "warning")
+            if self._busy:
+                self.set_status(reason or "采集已暂停，回复仍在生成…", "busy")
+            else:
+                self.set_status(reason or "采集已暂停，微信内容不再读取", "warning")
+        elif self._busy:
+            pass  # 正在生成时别把状态行盖成「等待新消息」
         elif configured:
             self.set_status("等待新消息", "idle")
         else:
@@ -1085,6 +1122,8 @@ class Overlay:
         微信当前开着的不是它，填进去就串会话了。"""
         if result:
             self.show(result)
+        elif self._busy:
+            return  # 正在生成，别把空态改回「等待对方的新消息」
         else:
             self.cands = []
             self._clear_cards()
